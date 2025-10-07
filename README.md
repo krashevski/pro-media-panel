@@ -1,27 +1,27 @@
 # 🧰 Media Panel Template
 
-Этот шаблон можно свободно использовать и изменять.
+This template is free to use and modify.
 
-Простой шаблон панели для запуска медиа-программ из одного текстового меню.
-Подходит для Flatpak, системных и пользовательских приложений.
+A simple panel template for launching media programs from a single text menu on Ubuntu.
+Suitable for Flatpak, system, and user applications.
 
-## Установка
+## Installation
 
-Скопируйте `bin/media-panel.sh` в `~/bin/` и сделайте его исполняемым:
+Copy `bin/media-panel.sh` to `~/bin/` and make it executable:
 ```bash
 chmod +x ~/bin/media-panel.sh
 
 ```
 
-Скопируйте .desktop/media-panel.desktop в:
+Copy .desktop/media-panel.desktop to:
 ```bash
 cp desktop/media-panel.desktop ~/.local/share/applications/
 ```
 
-Панель появится в меню приложений как «Медиа панель».
+The panel will appear in the application menu as "Media Panel."
 
-## Скрипт можно расширять:
+## The script is extensible:
 
-- Добавлять свои Flatpak-приложения
-- Добавлять пользовательские ffmpeg-пайплайны
-- Подключать Resolve и автоматизацию
+- Add your own Flatpak applications
+- Add custom ffmpeg pipelines
+- Connect Resolve and automation
