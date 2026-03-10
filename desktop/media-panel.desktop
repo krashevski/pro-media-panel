@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=Медиа панель
-Comment=Быстрый доступ к медиа-инструментам
-Exec=/home/vladislav/bin/media-panel.sh
-Icon=multimedia-section
-Terminal=true
-Type=Application
-Categories=AudioVideo;Utility;
-
