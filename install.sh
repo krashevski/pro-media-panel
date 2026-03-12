@@ -2,7 +2,9 @@
 
 set -e
 
-echo "=== REBK Media Panel Installer ==="
+echo "================================="
+echo "      PRODUCTION MEDIA PANEL"
+echo "================================="
 
 # -----------------------------
 # Пути установки
@@ -24,21 +26,21 @@ mkdir -p "$PROJECTS_DIR" "$EXPORT_DIR"
 # Установка скрипта
 # -----------------------------
 echo "Installing script..."
-cp bin/rebk-media-panel.sh "$USER_BIN/"
-chmod +x "$USER_BIN/rebk-media-panel.sh"
+cp bin/pro-media-panel.sh "$USER_BIN/"
+chmod +x "$USER_BIN/pro-media-panel.sh"
 
 # -----------------------------
 # Установка .desktop файла
 # -----------------------------
 echo "Installing desktop entry..."
-cp desktop/rebk-media-panel.desktop "$APP_DIR/"
+cp desktop/pro-media-panel.desktop "$APP_DIR/"
 # Меняем путь Exec внутри .desktop
-sed -i "s|Exec=.*|Exec=$USER_BIN/rebk-media-panel.sh|" "$APP_DIR/rebk-media-panel.desktop"
+sed -i "s|Exec=.*|Exec=$USER_BIN/pro-media-panel.sh|" "$APP_DIR/pro-media-panel.desktop"
 
 echo
 echo "Installation complete!"
-echo "You can now run REBK Media Panel from your menu or with:"
-echo "  $ $USER_BIN/rebk-media-panel.sh"
+echo "You can now run PRODUCTION MEDIA PANEL from your menu or with:"
+echo "  $ $USER_BIN/pro-media-panel.sh"
 echo
 echo "Project folder: $PROJECTS_DIR"
 echo "Export folder: $EXPORT_DIR"

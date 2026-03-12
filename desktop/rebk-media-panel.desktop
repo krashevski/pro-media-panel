@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=REBK Media Panel
-Comment=Панель видеопроизводства для REBK
-Exec=/home/$USER/bin/rebk-media-panel.sh
-Icon=multimedia
-Terminal=true
-Type=Application
-Categories=AudioVideo;Utility;
