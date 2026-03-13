@@ -7,19 +7,32 @@ set -euo pipefail
 
 IFS=$'\n\t'
 
+# Цвета
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+CYAN="\e[36m"
+RESET="\e[0m"
+BOLD="\e[1m"
+
 # =============================================================
 # Папки для хранения
 # =============================================================
 BASE_DIR="/mnt/shotcut"
 STORAGE_DIR="/mnt/storage"
+#
 VIDEO_DIR="$STORAGE_DIR/Videos"
+AUDIO_DIR="$STORAGE_DIR/Music"
 PROJECT_DIR="$VIDEO_DIR/projects"
-SHOTCUT_PROJECT_DIR="$HOME/shotcut/projects"
-
+#
+SHOTCUT_PROJECT_DIR="$BASE_DIR/projects"
+AUDIO_PROJECT_DIR="$AUDIO_DIR/projects"
 # Папка для экспортов (YouTube, архивы)
-EXPORT_DIR="$HOME/shotcut/exports"
-ARCHIVE_DIR="/mnt/backups/video_archives"  # архивы проектов
-mkdir -p "$EXPORT_DIR" "$ARCHIVE_DIR"
+EXPORT_DIR="$BASE_DIR/exports"
+#
+ARCHIVE_DIR="/mnt/backups/PMP"  
+ARCHIVE_VIDEO_DIR="$ARCHIVE_DIR/Videos" # архивы проектов
+mkdir -p "$PROJECT_DIR" "$AUDIO_PROJECT_DIR" "$EXPORT_DIR" "$ARCHIVE_DIR" "$ARCHIVE_VIDEO_DIR"
 
 PHONE_DIR=""
 
@@ -28,34 +41,6 @@ has_flatpak() { flatpak info "$1" &>/dev/null; }
 detect_gpu() { GPU=$(lspci | grep -qi nvidia && echo "NVIDIA" || echo "CPU"); }
 
 detect_nvenc() { NVENC=$(ffmpeg -encoders 2>/dev/null | grep -q nvenc && echo "YES" || echo "NO"); }
-
-:<<'DOC'
-detect_phone_dir() {
-
-    local base="/run/user/$UID/gvfs"
-
-    for p in "$base"/mtp:*; do
-        # Для записи видео используется OpenCamera
-        for d in \
-            "$p/Internal shared storage/DCIM/OpenCamera" \
-            "$p/Internal shared storage/DCIM/Camera" \
-            "$p/Internal shared storage/Movies" \
-            "$p/Внутренняя память/DCIM/OpenCamera"
-            "$p/Внутренняя память/DCIM/OpenCamera" \
-            "$p/Внутренняя память/DCIM/Camera" \
-            "$p/Внутренняя память/DCIM"
-        do
-            if [[ -d "$d" ]]; then
-                PHONE_DIR="$d"
-                return 0
-            fi
-        done
-    done
-
-    PHONE_DIR=""
-    return 1
-}
-DOC
 
 detect_phone_dir() {
 
@@ -95,35 +80,35 @@ phone_status() {
 
     local gvfs="/run/user/$UID/gvfs"
 
-    echo "Phone:"
+    echo " Phone:"
 
     if [[ ! -d "$gvfs" ]]; then
-        echo "  GVFS not available"
+        echo "   GVFS not available"
         return
     fi
 
     mtp=$(find "$gvfs" -maxdepth 1 -type d -name "mtp:*" 2>/dev/null | head -n1)
 
     if [[ -z "$mtp" ]]; then
-        echo "  Not connected"
+        echo "   Not connected"
         return
     fi
 
-    echo "  Device detected"
+    echo "   Device detected"
 
     detect_phone_dir
 
     if [[ -n "$PHONE_DIR" ]]; then
-        echo "  Video folder:"
-        echo "  $PHONE_DIR"
+        echo " Video folder:"
+        echo "   $PHONE_DIR"
     else
-        echo "  Video folder not found"
+        echo " Video folder not found"
     fi
 }
 
 pause() {
     echo
-    read -rp "Press Enter to continue..."
+    read -rp " Press Enter to continue..."
 }
 
 next_project_number() {
@@ -155,10 +140,12 @@ system_status() {
     detect_gpu
     detect_nvenc
 
-    echo "=== SYSTEM STATUS ==="
+    echo -e "${BOLD}${CYAN}====================================================${RESET}"
+    echo -e "               ${BOLD}${CYAN}SYSTEM STATUS${RESET}"
+    echo -e "${BOLD}${CYAN}====================================================${RESET}"
     echo
-    echo "GPU:   $GPU"
-    echo "NVENC: $NVENC"
+    echo " GPU:   $GPU"
+    echo " NVENC: $NVENC"
     echo
 
     df -h "$BASE_DIR" "$STORAGE_DIR" 2>/dev/null
@@ -170,7 +157,7 @@ system_status() {
         projects_count=$(find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)
     fi
 
-    echo "Projects: $projects_count"
+    echo " Projects: $projects_count"
     echo
     phone_status
 
@@ -181,11 +168,11 @@ system_status() {
 # READ PROJECT NAME
 # =================================
 read_project_name() {
-    read -rp "Project name: " project
+    read -rp " Project name: " project
     project=$(echo "$project" | xargs)
     project=$(printf "%s" "$project" | tr -cd '[:alnum:]_ -')
-    [[ -z "$project" ]] && { echo "No project name entered."; return 1; }
-    printf "%s" "$project"
+    [[ -z "$project" ]] && { echo " No project name entered."; return 1; }
+    printf " %s" "$project"
 }
 
 # =================================
@@ -194,12 +181,12 @@ read_project_name() {
 project_create() {
 
     echo
-    read -r -p "Project name: " name || return
+    read -r -p " Project name: " name || return
 
     name=$(printf "%s" "$name" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
     [[ -z "$name" ]] && {
-        echo "Empty project name."
+        echo " Empty project name."
         pause
         return
     }
@@ -209,12 +196,14 @@ project_create() {
     project_name="${number}_${name}"
 
     storage_project="$PROJECT_DIR/$project_name"
+    audio_project="$AUDIO_PROJECT_DIR/$project_name"
     shotcut_project="$SHOTCUT_PROJECT_DIR/$project_name"
 
     echo
-    echo "Creating project:"
-    echo "  Storage: $storage_project"
-    echo "  Shotcut: $shotcut_project"
+    echo " Creating project:"
+    echo "   Storage: $storage_project"
+    echo "   Audio: $audio_project"
+    echo "   Shotcut: $shotcut_project"
     echo
 
     mkdir -p \
@@ -227,7 +216,7 @@ project_create() {
         "$shotcut_project/proxy" \
         "$shotcut_project/project"
 
-    echo "✓ Project created: $project_name"
+    echo -e " ${GREEN}✓${RESET} Project created: $project_name"
     echo
 
     pause
@@ -271,14 +260,13 @@ project_info() {
 
     # Выводим аккуратно
     echo
-    echo "=== Project Info ==="
+    echo " === Project Info ==="
     echo
-    printf "Project: %s\n" "$project_name"
-    printf "Footage: %d clips | %s\n" "$footage_count" "$footage_size"
-    printf "Proxy:   %d files | %s\n" "$proxy_count" "$proxy_size"
-    printf "Total size: %s\n" "$total_size"
-    printf "Last edit: %s\n" "$last_edit"
-    echo
+    printf " Project: %s\n" "$project_name"
+    printf " Footage: %d clips | %s\n" "$footage_count" "$footage_size"
+    printf " Proxy:   %d files | %s\n" "$proxy_count" "$proxy_size"
+    printf " Total size: %s\n" "$total_size"
+    printf " Last edit: %s\n" "$last_edit"
     pause
 }
 
@@ -289,7 +277,7 @@ project_info() {
 project_list() {
 
     [[ -d "$PROJECT_DIR" ]] || {
-        echo "Project directory not found: $PROJECT_DIR"
+        echo " Project directory not found: $PROJECT_DIR"
         return 1
     }
 
@@ -300,11 +288,12 @@ project_list() {
     done < <(find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 
     (( ${#projects[@]} == 0 )) && {
-        echo "No projects found."
+        echo " No projects found."
         return 1
     }
 
-    echo "=== Select project ==="
+    echo
+    echo " === Select project ==="
     echo
 
     for i in "${!projects[@]}"; do
@@ -350,7 +339,7 @@ project_select() {
 ingest_from_phone() {
    
     detect_phone_dir || {
-        echo "Phone not detected."
+        echo " Phone not detected."
         return 1
     }
 
@@ -358,7 +347,7 @@ ingest_from_phone() {
     project_path=$(project_select) || return 1
 
     echo
-    echo "Importing into: $project_path"
+    echo " Importing into: $project_path"
     echo
 
     mkdir -p "$project_path/raw"
@@ -374,7 +363,7 @@ ingest_from_phone() {
             continue
         fi
 
-        echo "Copy: $base"
+        echo " Copy: $base"
         rsync -a --ignore-existing "$file" "$target"
 
     done
@@ -383,7 +372,7 @@ ingest_from_phone() {
     cp -u "$project_path/raw/"* "$project_path/footage/"
 
     echo
-    echo "Import complete."
+    echo " Import complete."
 }
 
 # =================================
@@ -408,13 +397,13 @@ generate_proxy() {
     # Собираем все видео
     files=("$src"/*.mp4 "$src"/*.mov)
     if [[ ${#files[@]} -eq 0 ]]; then
-        echo "No video files found in $src"
+        echo " No video files found in $src"
         pause
         return 1
     fi
 
     total=${#files[@]}
-    echo "Starting proxy generation: $total file(s) found."
+    echo " Starting proxy generation: $total file(s) found."
 
     count=1
     for f in "${files[@]}"; do
@@ -435,19 +424,252 @@ generate_proxy() {
     done
 
     echo
-    echo "✓ Proxy generation complete."
-    echo "Proxy folder: $dst"
+    echo -e " ${GREEN}✓${RESET} Proxy generation complete."
+    echo " Proxy folder: $dst"
     pause
 }
 
 # =================================
-# Launch Shotcut
+# Audio cleanup
+# =================================
+audio_cleanup() {
+
+    project_list || return
+
+    project_path=$(project_select) || return 1
+    project_name=$(basename "$project_path")
+
+    src="$project_path/footage"
+    dst="$AUDIO_PROJECT_DIR/$project_name"
+
+    mkdir -p "$dst"
+
+    echo
+    echo " Audio cleanup started..."
+    echo
+
+    # собираем список файлов
+    mapfile -d '' files < <(
+        find "$src" -type f \( \
+            -iname "*.mp4" -o \
+            -iname "*.mov" -o \
+            -iname "*.mkv" -o \
+            -iname "*.wav" -o \
+            -iname "*.mp3" -o \
+            -iname "*.m4a" \
+        \) -print0
+    )
+
+    total=${#files[@]}
+
+    if (( total == 0 )); then
+        echo " No supported media files found in $src"
+        pause
+        return
+    fi
+
+    echo " Found $total file(s)."
+    echo
+
+    count=1
+
+    for file in "${files[@]}"; do
+
+        name=$(basename "$file")
+        base="${name%.*}"
+        output="$dst/${base}_clean.wav"
+
+        echo " [$count/$total] Processing: $name"
+
+        if [[ -f "$output" ]]; then
+            echo " Skip (already processed)"
+            ((count++))
+            continue
+        fi
+
+        ffmpeg -y -i "$file" \
+            -vn \
+            -af "adeclip,adeclick,acompressor,loudnorm" \
+            "$output"
+
+        echo " Saved: $(basename "$output")"
+        echo
+
+        ((count++))
+
+    done
+
+    echo " Audio cleanup finished."
+    pause
+}
+
+# =================================
+# Auto Sync Audio
+# =================================
+auto_sync_audio() {
+
+    project_list || return
+
+    project_path=$(project_select) || return 1
+    project_name=$(basename "$project_path")
+
+    video_dir="$project_path/footage"
+    audio_dir="$AUDIO_PROJECT_DIR/$project_name"
+    output_dir="$project_path/edit"
+
+    mkdir -p "$output_dir"
+
+    echo
+    echo " Auto Sync Audio started..."
+    echo
+
+    mapfile -d '' videos < <(
+        find "$video_dir" -type f \( -iname "*.mp4" -o -iname "*.mov" -o -iname "*.mkv" \) -print0
+    )
+
+    total=${#videos[@]}
+
+    if (( total == 0 )); then
+        echo " No video files found."
+        pause
+        return
+    fi
+
+    echo " Found $total video file(s)."
+    echo
+
+    count=1
+
+    for video in "${videos[@]}"; do
+
+        name=$(basename "$video")
+        base="${name%.*}"
+
+        clean_audio="$audio_dir/${base}_clean.wav"
+        output="$output_dir/${base}_sync.mp4"
+
+        echo " [$count/$total] Processing: $name"
+
+        if [[ ! -f "$clean_audio" ]]; then
+            echo " Clean audio not found: ${base}_clean.wav"
+            ((count++))
+            continue
+        fi
+
+        ffmpeg -y \
+            -i "$video" \
+            -i "$clean_audio" \
+            -map 0:v:0 \
+            -map 1:a:0 \
+            -c:v copy \
+            -c:a aac -b:a 192k \
+            "$output"
+
+        echo " Synced video saved: $(basename "$output")"
+        echo
+
+        ((count++))
+
+    done
+
+    echo " Auto Sync Audio finished."
+    pause
+}
+
+# =================================
+# Batch Scene Split (Smart)
+# =================================
+# Batch Scene Split (Smart + Preview)
+# =================================
+batch_scene_split() {
+
+    project_list || return
+
+    project_path=$(project_select) || return 1
+    project_name=$(basename "$project_path")
+
+    src="$project_path/edit"
+    dst="$project_path/scenes"
+
+    mkdir -p "$dst"
+
+    echo
+    echo " Smart Scene Split started..."
+    echo
+
+    mapfile -d '' videos < <(
+        find "$src" -type f \( -iname "*.mp4" -o -iname "*.mov" -o -iname "*.mkv" \) -print0
+    )
+
+    total=${#videos[@]}
+
+    if (( total == 0 )); then
+        echo " No video files found."
+        pause
+        return
+    fi
+
+    echo " Found $total video file(s)."
+    echo
+
+    count=1
+
+    for video in "${videos[@]}"; do
+
+        name=$(basename "$video")
+        base="${name%.*}"
+
+        outdir="$dst/$base"
+        preview="$outdir/preview"
+
+        mkdir -p "$outdir"
+        mkdir -p "$preview"
+
+        echo " [$count/$total] Processing: $name"
+
+        # --- 1. Поиск сцен и сохранение кадров ---
+        ffmpeg -i "$video" \
+            -vf "select='gt(scene,0.25)'" \
+            -vsync vfr \
+            "$preview/scene_%03d.jpg"
+
+        if ! ls "$preview"/*.jpg >/dev/null 2>&1; then
+            echo " No scene changes detected — saving first frame"
+            ffmpeg -y -i "$video" -frames:v 1 "$preview/scene_001.jpg"
+        fi
+
+        # --- 2. Разрезание видео на сегменты ---
+        ffmpeg -i "$video" \
+            -c copy \
+            -f segment \
+            -segment_time 10 \
+            -reset_timestamps 1 \
+            "$outdir/${base}_scene_%03d.mp4"
+
+        for clip in "$outdir/${base}_scene_"*.mp4; do
+            ffmpeg -y -i "$clip" -frames:v 1 "$preview/$(basename "$clip" .mp4).jpg"
+        done
+
+        echo " Scenes saved in: $outdir"
+        echo " Preview frames: $preview"
+        echo
+
+        ((count++))
+
+    done
+
+    echo " Scene split finished."
+    pause
+}
+
+# =================================
+# Launch Sshotcut
 # =================================
 launch_shotcut() {
     if has_flatpak org.shotcut.Shotcut; then
         flatpak run org.shotcut.Shotcut
     else
-        echo "Shotcut not installed."
+        echo " Shotcut not installed."
         pause
     fi
 }
@@ -466,14 +688,14 @@ export_youtube() {
     src="$project_path/export"
 
     # Список доступных видео
-    echo "Available files in $src:"
+    echo " Available files in $src:"
     find "$src" -maxdepth 1 -type f \( -iname "*.mp4" -o -iname "*.mov" \) -print0 | xargs -0 -n1 echo
 
-    read -rp "Input video file (full name from above): " input_file
+    read -rp " Input video file (full name from above): " input_file
     input="$src/$input_file"
 
     if [[ ! -f "$input" ]]; then
-        echo "File not found: $input"
+        echo " File not found: $input"
         pause
         return 1
     fi
@@ -482,8 +704,8 @@ export_youtube() {
     out="$EXPORT_DIR/${project_name}_youtube_$(date +%s).mp4"
 
     echo
-    echo "Exporting $input_file → $out"
-    echo "This may take a while..."
+    echo " Exporting $input_file → $out"
+    echo " This may take a while..."
 
     # Получаем длительность видео в секундах
     duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$input")
@@ -505,12 +727,12 @@ export_youtube() {
                 if (( duration > 0 )); then
                     percent=$(( elapsed * 100 / duration ))
                 fi
-                printf "\rProgress: %3d%%" "$percent"
+                printf " \rProgress: %3d%%" "$percent"
             fi
         done
 
     echo
-    echo "✓ Export created: $out"
+    cho -e " ${GREEN}✓${RESET} Export created: $out"
     pause
 }
 
@@ -524,21 +746,18 @@ archive_project() {
     project_path=$(project_select) || return 1
     project_name=$(basename "$project_path")
 
-    # Папка для архивов
-    mkdir -p "$EXPORT_DIR"
-
     # Имя архива
-    archive="$ARCHIVE_DIR/${project_name}_archive_$(date +%Y%m%d).tar.gz"
+    archive="$ARCHIVE_VIDEO_DIR/${project_name}_archive_$(date +%Y%m%d).tar.gz"
 
     # Проверка существования каталога проекта
     if [[ ! -d "$project_path" ]]; then
-        echo "Project directory not found: $project_path"
+        echo " Project directory not found: $project_path"
         pause
         return 1
     fi
 
     echo
-    echo "Archiving project: $project_name → $archive"
+    echo " Archiving project: $project_name → $archive"
 
     # Мини-прогресс: используем pv, если установлено
     if command -v pv &>/dev/null; then
@@ -549,7 +768,7 @@ archive_project() {
     fi
 
     echo
-    echo "✓ Archive saved: $archive"
+    echo -e " ${GREEN}✓${RESET} Archive saved: $archive"
     pause
 }
 
@@ -594,38 +813,48 @@ audio_menu() {
 # =================================
 while true; do
     clear
-    echo "================================="
-    echo "      PRODUCTION MEDIA PANEL"
-    echo "================================="
+    echo -e "${BOLD}${CYAN}====================================================${RESET}"
+    echo -e "               ${BOLD}${CYAN}PRODUCTION MEDIA PANEL${RESET}"
+    echo -e "${BOLD}${CYAN}====================================================${RESET}"
+    echo -e "${BOLD} System:${RESET}"
+    echo "   1) System status"
+    echo -e "${BOLD} Projects:${RESET}"
+    echo "   2) Project Info"
+    echo "   3) Create project"
+    echo "   4) Footage ingest from phone"
+    echo -e "${BOLD} Production:${RESET}"
+    echo "   5) Generate proxy"
+    echo "   6) Audio cleanup"
+    echo "   7) Auto sync audio"
+    echo "   8) Batch Scene Split (Smart Scene Detection)"
+    echo "   9) Launch Shotcut"
+    echo -e "${BOLD} Export & archive:${RESET}"
+    echo "   10) Export YouTube"
+    echo "   11) Archive project"
+    echo -e "${BOLD} Tools:${RESET}"
+    echo "   12) Video tools"
+    echo "   13) Graphics tools"
+    echo "   14) Audio tools"
     echo
-    echo "1) System status"
-    echo "2) Create project"
-    echo "3) Footage ingest from phone"
-    echo "4) Generate proxy"
-    echo "5) Launch Shotcut"
-    echo "6) Export YouTube"
-    echo "7) Archive project"
-    echo
-    echo "8) Video tools"
-    echo "9) Graphics tools"
-    echo "10) Audio tools"
-    echo "11) Project Info"
-    echo
-    echo "0) Exit"
-    echo
+    echo -e " ${RED}0) Exit${RESET}"
+    echo -e "${BOLD}${CYAN}====================================================${RESET}"
     read -rp "Select: " main
     case "$main" in
         1) system_status ;;
-        2) project_create ;;
-        3) ingest_from_phone ;;
-        4) generate_proxy ;;
-        5) launch_shotcut ;;
-        6) export_youtube ;;
-        7) archive_project ;;
-        8) video_tools_menu ;;
-        9) graphics_menu ;;
-        10) audio_menu ;;
-        11) project_info ;;
+        2) project_info ;;
+        3) project_create ;;
+        4) ingest_from_phone ;;
+        5) generate_proxy ;;
+        6) audio_cleanup ;;
+        7) auto_sync_audio ;;
+        8) batch_scene_split ;;
+        9) launch_shotcut ;;
+        10) export_youtube ;;
+        11) archive_project ;;
+        12) video_tools_menu ;;
+        13) graphics_menu ;;
+        14) audio_menu ;;
+
         0) exit 0 ;;
         *) echo "Invalid option"; pause ;;
     esac
