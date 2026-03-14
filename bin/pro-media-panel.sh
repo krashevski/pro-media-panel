@@ -23,16 +23,38 @@ STORAGE_DIR="/mnt/storage"
 #
 VIDEO_DIR="$STORAGE_DIR/Videos"
 AUDIO_DIR="$STORAGE_DIR/Music"
+IMAGES_DIR="$STORAGE_DIR/Pictures"
 PROJECT_DIR="$VIDEO_DIR/projects"
 #
 SHOTCUT_PROJECT_DIR="$BASE_DIR/projects"
 AUDIO_PROJECT_DIR="$AUDIO_DIR/projects"
+IMAGES_PROJECT_DIR="$IMAGES_DIR/projects"
 # Папка для экспортов (YouTube, архивы)
 EXPORT_DIR="$BASE_DIR/exports"
 #
 ARCHIVE_DIR="/mnt/backups/PMP"  
 ARCHIVE_VIDEO_DIR="$ARCHIVE_DIR/Videos" # архивы проектов
-mkdir -p "$PROJECT_DIR" "$AUDIO_PROJECT_DIR" "$EXPORT_DIR" "$ARCHIVE_DIR" "$ARCHIVE_VIDEO_DIR"
+
+mkdir -p \
+"$PROJECT_DIR" \
+"$AUDIO_PROJECT_DIR" \
+"$EXPORT_DIR" \
+"$ARCHIVE_DIR" \
+"$ARCHIVE_VIDEO_DIR" \
+"$IMAGES_PROJECT_DIR"
+
+TRASH_DIR="$ARCHIVE_DIR/trash"
+TRASH_VIDEO_DIR="$TRASH_DIR/Videos"
+TRASH_AUDIO_DIR="$TRASH_DIR/Audio"
+TRASH_IMAGES_DIR="$TRASH_DIR/Images"
+TRASH_SHOTCUT_DIR="$TRASH_DIR/Shotcut"
+
+mkdir -p \
+"$TRASH_VIDEO_DIR" \
+"$TRASH_AUDIO_DIR" \
+"$TRASH_IMAGES_DIR" \
+"$TRASH_SHOTCUT_DIR"
+
 
 PHONE_DIR=""
 
@@ -197,12 +219,14 @@ project_create() {
 
     storage_project="$PROJECT_DIR/$project_name"
     audio_project="$AUDIO_PROJECT_DIR/$project_name"
+    images_project="$IMAGES_PROJECT_DIR/$project_name"
     shotcut_project="$SHOTCUT_PROJECT_DIR/$project_name"
 
     echo
     echo " Creating project:"
     echo "   Storage: $storage_project"
     echo "   Audio: $audio_project"
+    echo "   Images: $images_project"
     echo "   Shotcut: $shotcut_project"
     echo
 
@@ -211,6 +235,9 @@ project_create() {
         "$storage_project/raw" \
         "$storage_project/edit" \
         "$storage_project/export"
+
+    mkdir -p \
+        "$images_project"
 
     mkdir -p \
         "$shotcut_project/proxy" \
@@ -328,6 +355,180 @@ project_select() {
     fi
 
     printf "%s\n" "${projects[$((num-1))]}"
+}
+
+# =================================
+# PROJECT LOCK
+# =================================
+project_lock() {
+
+    local project_path="$1"
+
+    lockfile="$project_path/.lock"
+
+    echo "user=$USER" > "$lockfile"
+    echo "host=$(hostname)" >> "$lockfile"
+    echo "time=$(date '+%Y-%m-%d %H:%M')" >> "$lockfile"
+}
+
+# =================================
+# CHECK PROJECT LOCK
+# =================================
+project_is_locked() {
+
+    local project_path="$1"
+
+    [[ -f "$project_path/.lock" ]]
+}
+
+# =================================
+# UNLOCK PROJECT
+# =================================
+project_unlock() {
+
+    local project_path="$1"
+
+    rm -f "$project_path/.lock"
+}
+
+# =================================
+# DELETE PROJECT (SAFE TRASH)
+# =================================
+delete_project() {
+
+    project_list || return
+    project_path=$(project_select) || return 1
+    project_name=$(basename "$project_path")
+
+    storage_project="$PROJECT_DIR/$project_name"
+    audio_project="$AUDIO_PROJECT_DIR/$project_name"
+    images_project="$IMAGES_PROJECT_DIR/$project_name"
+    shotcut_project="$SHOTCUT_PROJECT_DIR/$project_name"
+
+    echo
+    echo " Project to delete (move to TRASH):"
+    echo "  Storage: $storage_project"
+    echo "  Audio:   $audio_project"
+    echo "  Images:  $images_project"
+    echo "  Shotcut: $shotcut_project"
+    echo
+
+    echo -e "${RED}WARNING:${RESET} Project will be moved to TRASH"
+    read -rp " Type DELETE to move project to trash: " confirm
+
+    confirm=${confirm^^}
+
+    [[ "$confirm" != "DELETE" ]] && {
+        echo " Cancelled."
+        pause
+        return
+    }
+
+    timestamp=$(date +%Y%m%d_%H%M%S)
+
+    echo
+    echo " Moving project to trash..."
+
+    [[ -d "$storage_project" ]] && \
+        mv "$storage_project" "$TRASH_VIDEO_DIR/${project_name}_$timestamp"
+
+    [[ -d "$audio_project" ]] && \
+        mv "$audio_project" "$TRASH_AUDIO_DIR/${project_name}_$timestamp"
+
+    [[ -d "$images_project" ]] && \
+        mv "$images_project" "$TRASH_IMAGES_DIR/${project_name}_$timestamp"
+
+    [[ -d "$shotcut_project" ]] && \
+        mv "$shotcut_project" "$TRASH_SHOTCUT_DIR/${project_name}_$timestamp"
+
+    echo
+    echo -e " ${GREEN}✓${RESET} Project moved to trash"
+    echo " Location: $TRASH_DIR"
+
+    pause
+}
+
+# =================================
+# RESTORE PROJECT FROM TRASH
+# =================================
+restore_project() {
+
+    echo
+    echo " === Trash projects ==="
+    echo
+
+    trash_projects=()
+
+    while IFS= read -r -d '' dir; do
+        trash_projects+=("$dir")
+    done < <(find "$TRASH_VIDEO_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+
+    (( ${#trash_projects[@]} == 0 )) && {
+        echo " Trash is empty."
+        pause
+        return
+    }
+
+    for i in "${!trash_projects[@]}"; do
+        name=$(basename "${trash_projects[$i]}")
+        printf "%2d) %s\n" "$((i+1))" "$name"
+    done
+
+    echo
+    read -rp " Select project to restore: " num
+
+    [[ ! "$num" =~ ^[0-9]+$ ]] && return
+
+    dir="${trash_projects[$((num-1))]}"
+    name=$(basename "$dir")
+
+    project_name=$(echo "$name" | sed 's/_[0-9]\{8\}_[0-9]\{6\}$//')
+
+    echo
+    echo " Restoring project: $project_name"
+    echo
+
+    mv "$TRASH_VIDEO_DIR/$name" "$PROJECT_DIR/$project_name" 2>/dev/null || true
+    mv "$TRASH_AUDIO_DIR/$name" "$AUDIO_PROJECT_DIR/$project_name" 2>/dev/null || true
+    mv "$TRASH_IMAGES_DIR/$name" "$IMAGES_PROJECT_DIR/$project_name" 2>/dev/null || true
+    mv "$TRASH_SHOTCUT_DIR/$name" "$SHOTCUT_PROJECT_DIR/$project_name" 2>/dev/null || true
+
+    echo -e " ${GREEN}✓${RESET} Project restored"
+
+    pause
+}
+
+# =================================
+# PURGE TRASH (PERMANENT DELETE)
+# =================================
+purge_trash() {
+
+    echo
+    echo -e "${RED}WARNING:${RESET} This will permanently delete ALL trash projects."
+    echo
+
+    read -rp " Type PURGE to confirm: " confirm
+
+    confirm=${confirm^^}
+
+    [[ "$confirm" != "PURGE" ]] && {
+        echo " Cancelled."
+        pause
+        return
+    }
+
+    echo
+    echo " Cleaning trash..."
+
+    rm -rf "$TRASH_VIDEO_DIR"/*
+    rm -rf "$TRASH_AUDIO_DIR"/*
+    rm -rf "$TRASH_IMAGES_DIR"/*
+    rm -rf "$TRASH_SHOTCUT_DIR"/*
+
+    echo
+    echo -e " ${GREEN}✓${RESET} Trash cleaned."
+
+    pause
 }
 
 # --- простая пауза перед запросом ---
@@ -576,8 +777,7 @@ auto_sync_audio() {
     pause
 }
 
-# =================================
-# Batch Scene Split (Smart)
+
 # =================================
 # Batch Scene Split (Smart + Preview)
 # =================================
@@ -666,12 +866,26 @@ batch_scene_split() {
 # Launch Sshotcut
 # =================================
 launch_shotcut() {
-    if has_flatpak org.shotcut.Shotcut; then
-        flatpak run org.shotcut.Shotcut
-    else
-        echo " Shotcut not installed."
+
+    project_list || return
+    project_path=$(project_select) || return 1
+
+    if project_is_locked "$project_path"; then
+        echo " Project is locked:"
+        cat "$project_path/.lock"
         pause
+        return
     fi
+
+    echo " Locking project..."
+    project_lock "$project_path"
+
+    echo " Launching Shotcut..."
+
+    flatpak run org.shotcut.Shotcut
+
+    echo " Unlocking project..."
+    project_unlock "$project_path"
 }
 
 # =================================
@@ -821,20 +1035,23 @@ while true; do
     echo -e "${BOLD} Projects:${RESET}"
     echo "   2) Project Info"
     echo "   3) Create project"
-    echo "   4) Footage ingest from phone"
+    echo "   4) Delete project (safe trash)"
+    echo "   5) Restore project"
+    echo "   6) Purge trash"
+    echo "   7) Footage ingest from phone"
     echo -e "${BOLD} Production:${RESET}"
-    echo "   5) Generate proxy"
-    echo "   6) Audio cleanup"
-    echo "   7) Auto sync audio"
-    echo "   8) Batch Scene Split (Smart Scene Detection)"
-    echo "   9) Launch Shotcut"
+    echo "   8) Generate proxy"
+    echo "   9) Audio cleanup"
+    echo "   10) Auto sync audio"
+    echo "   11) Batch Scene Split (Smart Scene Detection)"
+    echo "   12) Launch Shotcut"
     echo -e "${BOLD} Export & archive:${RESET}"
-    echo "   10) Export YouTube"
-    echo "   11) Archive project"
+    echo "   13) Export YouTube"
+    echo "   14) Archive project"
     echo -e "${BOLD} Tools:${RESET}"
-    echo "   12) Video tools"
-    echo "   13) Graphics tools"
-    echo "   14) Audio tools"
+    echo "   15) Video tools"
+    echo "   16) Graphics tools"
+    echo "   17) Audio tools"
     echo
     echo -e " ${RED}0) Exit${RESET}"
     echo -e "${BOLD}${CYAN}====================================================${RESET}"
@@ -843,17 +1060,20 @@ while true; do
         1) system_status ;;
         2) project_info ;;
         3) project_create ;;
-        4) ingest_from_phone ;;
-        5) generate_proxy ;;
-        6) audio_cleanup ;;
-        7) auto_sync_audio ;;
-        8) batch_scene_split ;;
-        9) launch_shotcut ;;
-        10) export_youtube ;;
-        11) archive_project ;;
-        12) video_tools_menu ;;
-        13) graphics_menu ;;
-        14) audio_menu ;;
+        4) delete_project ;;
+        5) restore_project ;;
+        6) purge_trash ;;
+        7) ingest_from_phone ;;
+        8) generate_proxy ;;
+        9) audio_cleanup ;;
+        10) auto_sync_audio ;;
+        11) batch_scene_split ;;
+        12) launch_shotcut ;;
+        13) export_youtube ;;
+        14) archive_project ;;
+        15) video_tools_menu ;;
+        16) graphics_menu ;;
+        17) audio_menu ;;
 
         0) exit 0 ;;
         *) echo "Invalid option"; pause ;;

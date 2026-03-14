@@ -1,8 +1,8 @@
 [Desktop Entry]
 Name=Pro media panel
 Comment=Панель видеопроизводства PRODUCTION MEDIA PANEL
-Exec=/home/$USER/bin/pro-media-panel.sh
-Icon=multimedia
+Exec=/usr/local/bin/pro-media-panel.sh
+Icon=pro-media-panel
 Terminal=true
 Type=Application
 Categories=AudioVideo;Utility;

@@ -1,5 +1,7 @@
 # PRODUCTION MEDIA PANEL
 
+**Languages:** [🇬🇧 English](../../README.md) | [🇷🇺 Русский](README_RU.md)
+
 **Production Media Panel (PMP)** — интерактивная Linux-панель для управления видео-проектами, ingest с телефона, генерации прокси, монтажа и экспорта. 
 Разработано для документальных и творческих проектов.
 
